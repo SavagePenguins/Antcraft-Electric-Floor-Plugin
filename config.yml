@@ -1,0 +1,7 @@
+antcraft:
+  electricfloor:
+    arena:
+      game:
+        world: world
+      lobby:
+        world: world

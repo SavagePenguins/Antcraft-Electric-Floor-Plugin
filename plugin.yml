@@ -1,0 +1,8 @@
+main: me.venomouspenguin.antcraft.electricfloor.core.Main
+version: 0.0.0
+name: ACElectricFloor
+
+commands:
+  electricfloor:
+    description: Main command
+    aliases: [ecf, ef]
