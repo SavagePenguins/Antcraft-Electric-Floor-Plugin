@@ -1,5 +1,9 @@
-package me.venomouspenguin.antcraft.electricfloor.game;
+package me.venomouspenguin.antcraft.electricfloor.game.countdowns;
 
+import me.venomouspenguin.antcraft.electricfloor.game.GameManager;
+import me.venomouspenguin.antcraft.electricfloor.game.GameStates;
+
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
@@ -10,10 +14,11 @@ public class Countdown extends BukkitRunnable {
 	private int i;
 	private GameManager gm;
 	
+	
 	public Countdown(GameManager gm)
 	{
 		this.gm = gm;
-		this.i = 60;
+		this.i = 5;
 	}
 	
 	@Override
@@ -21,9 +26,10 @@ public class Countdown extends BukkitRunnable {
 	{
 		if(gm.getPlayers().size() == 2)
 		{
+			
 			if(i == 0)
 			{
-				cancel();
+				Bukkit.getServer().getScheduler().cancelTask(gm.getTaskID());
 				gm.start();
 			}
 			else
@@ -63,7 +69,7 @@ public class Countdown extends BukkitRunnable {
 		}
 		else
 		{
-			this.cancel();
+			Bukkit.getServer().getScheduler().cancelTask(gm.getTaskID());
 			gm.broadcastMessage("Not enough players");
 			gm.broadcastMessage("Countdown aborted: " + ChatColor.GRAY + "[" + ChatColor.GREEN + gm.getPlayers().size() + ChatColor.GRAY + "/" + ChatColor.GREEN + "8" + 
 			ChatColor.GRAY + "]");

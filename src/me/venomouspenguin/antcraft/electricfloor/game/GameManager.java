@@ -2,16 +2,23 @@ package me.venomouspenguin.antcraft.electricfloor.game;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Set;
 import java.util.UUID;
 
 import me.venomouspenguin.antcraft.electricfloor.core.Main;
+import me.venomouspenguin.antcraft.electricfloor.game.countdowns.Countdown;
+import me.venomouspenguin.antcraft.electricfloor.game.countdowns.GameBeginCountdown;
+import me.venomouspenguin.antcraft.electricfloor.game.countdowns.TeleportCountdown;
 
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
+import org.bukkit.Material;
 import org.bukkit.World;
+import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.scheduler.BukkitRunnable;
 
 public class GameManager
 {
@@ -22,9 +29,16 @@ public class GameManager
 	private boolean inUse;
 	private boolean ableToJoin;
 	private boolean listenersToggle;
+	private boolean hasDoneCountdownTeleportCountdown;
 	private World arenaWorld;
 	private World lobbyWorld;
+	
+	private int task;
+	private int task1;
+		
 	private ArrayList<Player> players = new ArrayList<Player>();
+	private ArrayList<Player> playersInGame = new ArrayList<Player>();
+	private ArrayList<Player> playersSpectator = new ArrayList<Player>();
 	private HashMap<UUID, Location> playerOriginalLocation = new HashMap<UUID, Location>();
 	private HashMap<UUID, ItemStack[]> playerInv = new HashMap<UUID, ItemStack[]>();
 	private HashMap<UUID, ItemStack[]> playerArmorInv = new HashMap<UUID, ItemStack[]>();
@@ -37,6 +51,7 @@ public class GameManager
 		this.lobbyWorld = Bukkit.getServer().getWorld(plugin.getConfig().getString("antcraft.electricfloor.arena.lobby.world"));
 		this.ableToJoin = true;
 		this.listenersToggle = false;
+		this.hasDoneCountdownTeleportCountdown = false;
 	}
 	
 	public static GameManager getManager()
@@ -145,7 +160,9 @@ public class GameManager
 				{
 					state = GameStates.COUNTDOWN;
 					ableToJoin = false;
-					Bukkit.getServer().getScheduler().scheduleSyncRepeatingTask(plugin, new Countdown(this), 0, 20);
+					//BukkitScheduler sch = Bukkit.getServer().getScheduler();
+					//sch.scheduleSyncRepeatingTask(plugin, new Countdown(this), 0, 20);
+					task = Bukkit.getServer().getScheduler().scheduleSyncRepeatingTask(plugin, new Countdown(this), 0, 20);
 				}
 				return;
 			}
@@ -172,6 +189,8 @@ public class GameManager
 		}
 		
 		players.remove(p);
+		playersInGame.remove(p);
+		playersSpectator.remove(p);
 		
 		Location loc = playerOriginalLocation.get(p.getUniqueId());
 		p.teleport(loc);
@@ -201,33 +220,116 @@ public class GameManager
 		p.teleport(loc);
 	}
 	
+	@SuppressWarnings("deprecation")
 	public void start()
 	{
 		ableToJoin = false;
 		inUse = true;
 		state = GameStates.INGAME;
 		
-		broadcastMessage("The waiting is over");
+		playersInGame.addAll(players);
+		
 		broadcastMessage("You will be teleported to the map in: " + ChatColor.GREEN + "10 Seconds");
 		
-		Bukkit.getServer().getScheduler().scheduleSyncDelayedTask(plugin, new Runnable() {
+		//Countdown 
+		task = Bukkit.getServer().getScheduler().scheduleSyncRepeatingTask(plugin, new TeleportCountdown(this), 0, 20);
+		task1 = Bukkit.getServer().getScheduler().scheduleSyncRepeatingTask(plugin, new GameBeginCountdown(this), 0, 20);
+		
+		Bukkit.getServer().getScheduler().scheduleSyncDelayedTask(plugin, new BukkitRunnable()
+		{
 
 			public void run() 
 			{
-				teleportPlayersToArena();
+				broadcastMessage("Players teleported");
+				broadcastMessage("Game begins in: " + ChatColor.GREEN + "10 Seconds");
+
+				hasDoneCountdownTeleportCountdown = true;
 			}
 			
-		}, 20*10);
+		}, 20*10L);
 		
-		broadcastMessage("Players have been teleported");
-		broadcastMessage("Game begins in: " + ChatColor.GREEN + "10 Seconds");
-		Bukkit.getServer().getScheduler().scheduleSyncDelayedTask(plugin, new Runnable() {
+		
+	}
+	
+	public void inGameStart()
+	{
+		this.listenersToggle = true;
+		gm.broadcastMessage("Good Luck!");
+	}
+	
+	public void endGame()
+	{
+		broadcastMessage("The game has ended");
+		setState(GameStates.ENDING);
+		for(Player p : playersInGame)
+		{
+			if(playersInGame.size() == 1)
+			{
+				Player remainder = playersInGame.get(0);
+				broadcastMessage("Player, " + ChatColor.AQUA + remainder.getName() + ChatColor.YELLOW + " has won the game");
+			}
+		}
+		playersInGame.clear();
+		playersSpectator.clear();
+		
+		Bukkit.getServer().getScheduler().scheduleSyncDelayedTask(plugin, new Runnable()
+		{
+
 			public void run() 
 			{
-				listenersToggle = true;
-				broadcastMessage("The game has begun");
+				broadcastMessage("You will return to your orignal position");
+				
+				for(Player p : players)
+				{
+					Location loc = playerOriginalLocation.get(p.getUniqueId());
+					p.teleport(loc);
+					p.getInventory().setContents(playerInv.get(p.getUniqueId()));
+					p.getInventory().setArmorContents(playerArmorInv.get(p.getUniqueId()));
+					playerArmorInv.remove(p.getUniqueId());
+					playerInv.remove(p.getUniqueId());
+					playerOriginalLocation.remove(p.getUniqueId());
+
+					
+				}
 			}
-		}, 20*10);
+			
+		}, 20*5L);
+		
+		Bukkit.getServer().getScheduler().scheduleSyncDelayedTask(plugin, new Runnable()
+		{
+
+			public void run() {
+				players.clear();
+				setListenerToggle(false);
+				setState(GameStates.LOBBY);
+				setInUse(false);
+				setAbleToJoin(true);
+				resetFloor();
+			}
+			
+		}, 20*6L);
+	}
+	
+	public void resetFloor()
+	{
+		double xmin = plugin.getConfig().getDouble("antcraft.electricfloor.arena.game.floor.x-min");
+		double xmax = plugin.getConfig().getDouble("antcraft.electricfloor.arena.game.floor.x-max");
+		double zmin = plugin.getConfig().getDouble("antcraft.electricfloor.arena.game.floor.z-min");
+		double zmax = plugin.getConfig().getDouble("antcraft.electricfloor.arena.game.floor.z-max");
+		double y = plugin.getConfig().getDouble("antcraft.electricfloor.arean.game.floor.y");
+		
+		double width = xmax - xmin;
+		double breadth = zmax - zmin;
+		
+		for(int x = 0; x < width; x++)
+		{
+			for(int z = 0; z < breadth; z++)
+			{
+				Block block = arenaWorld.getBlockAt(new Location(arenaWorld, xmin + x, y, zmin + z));
+			    block.setType(Material.STAINED_GLASS);
+			}	
+		}
+		Bukkit.broadcastMessage("Howdy");
 	}
 	
 	public void teleportPlayersToArena()
@@ -248,6 +350,53 @@ public class GameManager
 				p.teleport(loc);
 			}
 		}
+	}
+	
+	public void setXMin(Player p)
+	{
+		Block b = p.getTargetBlock((Set<Material>)null, 10);
+		Location loc = b.getLocation();
+		
+		plugin.getConfig().set("antcraft.electricfloor.arena.game.floor.x-min", loc.getBlockX());
+		plugin.saveConfig();
+		p.sendMessage(plugin.LOGO + ChatColor.YELLOW + "You have set the x min location");
+	}
+	public void setXMax(Player p)
+	{
+		Block b = p.getTargetBlock((Set<Material>)null, 10);
+		Location loc = b.getLocation();
+		
+		plugin.getConfig().set("antcraft.electricfloor.arena.game.floor.x-max", loc.getBlockX());
+		plugin.saveConfig();
+		p.sendMessage(plugin.LOGO + ChatColor.YELLOW + "You have set the x max location");
+	}
+
+	public void setZMin(Player p)
+	{
+		Block b = p.getTargetBlock((Set<Material>)null, 10);
+		Location loc = b.getLocation();
+		
+		plugin.getConfig().set("antcraft.electricfloor.arena.game.floor.z-min", loc.getBlockZ());
+		plugin.saveConfig();
+		p.sendMessage(plugin.LOGO + ChatColor.YELLOW + "You have set the z min location");
+	}
+	public void setZMax(Player p)
+	{
+		Block b = p.getTargetBlock((Set<Material>)null, 10);
+		Location loc = b.getLocation();
+		
+		plugin.getConfig().set("antcraft.electricfloor.arena.game.floor.z-max", loc.getBlockZ());
+		plugin.saveConfig();
+		p.sendMessage(plugin.LOGO + ChatColor.YELLOW + "You have set the z max location");
+	}
+	public void setY(Player p)
+	{
+		Block b = p.getTargetBlock((Set<Material>)null, 10);
+		Location loc = b.getLocation();
+		
+		plugin.getConfig().set("antcraft.electricfloor.arena.game.floor.y", loc.getBlockY());
+		plugin.saveConfig();
+		p.sendMessage(plugin.LOGO + ChatColor.YELLOW + "You have set the y location");
 	}
 	
 	public void broadcastMessage(String message)
@@ -296,4 +445,38 @@ public class GameManager
 		this.ableToJoin = value;
 	}
 	
+	public int getTaskID()
+	{
+		return task;
+	}
+	public int getTaskID1()
+	{
+		return task1;
+	}
+	
+	public boolean getHasDoneCountdownTeleportCountdown()
+	{
+		return hasDoneCountdownTeleportCountdown;
+	}
+	
+	public void setHasDoneCountdownTeleport(boolean value)
+	{
+		this.hasDoneCountdownTeleportCountdown = value;
+	}
+	
+	public ArrayList<Player> getInGamePlayers()
+	{
+		return playersInGame;
+	}
+
+	public ArrayList<Player> getSpectators()
+	{
+		return playersSpectator;
+	}
+	
+	public void setInUse(boolean value)
+	{
+		this.inUse = value;
+	}
+
 }
