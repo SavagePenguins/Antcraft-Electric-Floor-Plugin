@@ -35,6 +35,7 @@ public class GameManager
 	
 	private int task;
 	private int task1;
+	private int powerupTask;
 		
 	private ArrayList<Player> players = new ArrayList<Player>();
 	private ArrayList<Player> playersInGame = new ArrayList<Player>();
@@ -350,6 +351,11 @@ public class GameManager
 				p.teleport(loc);
 			}
 		}
+	}
+	
+	public void spawnPowerups()
+	{
+		 powerupsTask = Bukkit.getServer().getScheduler().scheduleSyncRepeatingTask(plugin, new PowerupSpawn(), 20);
 	}
 	
 	public void setXMin(Player p)
